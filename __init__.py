@@ -47,7 +47,6 @@ def generate_destination_vector(index, sample_id, concepts, text_scale):
     return dest_vec
 
 
-
 def run_traversal(ctx):
     dataset = ctx.dataset
     index_name = ctx.params.get("index")
@@ -93,7 +92,9 @@ class OpenTraversalPanel(foo.Operator):
     def execute(self, ctx):
         ctx.trigger(
             "open_panel",
-            params=dict(name="TraversalPanel", isActive=True, layout="horizontal"),
+            params=dict(
+                name="TraversalPanel", isActive=True, layout="horizontal"
+            ),
         )
 
 

@@ -1,16 +1,14 @@
 ## Concept Space Traversal Plugin
 
-
 This plugin allows you to "traverse" the concept space of a similarity index
 by adding text prompts (with configurable strength) to a base image.
 
-
 It demonstrates how to do the following:
 
--   use Python and JS in the same plugin
--   create a `Panel` with custom components
--   query dataset properties from JS
--   add an SVG icon to the UI
+- use Python and JS in the same plugin
+- create a `Panel` with custom components
+- query dataset properties from JS
+- add an SVG icon to the UI
 
 **Note:** This plugin requires a similarity index that supports prompts (i.e.
 embeds text and images) to be present on the dataset. You can create one with:
@@ -42,9 +40,9 @@ locally.
 
 ### `open_traversal_panel`
 
--   Opens the concept space traversal panel on click
--   Only activated when the dataset has a similarity index
+- Opens the concept space traversal panel on click
+- Only activated when the dataset has a similarity index
 
 ### `traverser`
 
--   Runs the Traverser on the dataset
+- Runs the Traverser on the dataset
