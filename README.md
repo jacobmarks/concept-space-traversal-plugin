@@ -1,4 +1,5 @@
 ## Concept Space Traversal Plugin
+![2023-08-25 11 33 40](https://github.com/jacobmarks/concept-space-traversal-plugin/assets/12500356/1e52624a-67f8-48f9-8dcf-99f4a0568e7c)
 
 This plugin allows you to "traverse" the concept space of a similarity index
 by adding text prompts (with configurable strength) to a base image.
