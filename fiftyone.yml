@@ -1,0 +1,10 @@
+name: "@jacobmarks/concept_space_traversal"
+description: Navigate concept space with CLIP, vector search, and FiftyOne!
+version: 1.0.0
+fiftyone:
+  version: "*"
+license: Apache 2.0
+url: "https://github.com/jacobmarks/concept-space-traversal/blob/main/README.md"
+operators:
+  - traverser
+  - open_traversal_panel
