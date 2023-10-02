@@ -8,3 +8,4 @@ url: "https://github.com/jacobmarks/concept-space-traversal/blob/main/README.md"
 operators:
   - traverser
   - open_traversal_panel
+  - get_sample_url

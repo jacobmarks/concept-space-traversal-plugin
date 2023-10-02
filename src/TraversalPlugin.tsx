@@ -1,7 +1,7 @@
 import { registerComponent, PluginComponentType } from "@fiftyone/plugins";
 import { useOperatorExecutor } from "@fiftyone/operators";
-import { useState } from "react";
-import { useRecoilValue, useRecoilState } from "recoil";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRecoilValue } from "recoil";
 import * as fos from "@fiftyone/state";
 import {
   Box,
@@ -14,19 +14,47 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  SliderProps,
+  CircularProgress,
+  ButtonProps,
+  Alert,
+  AlertTitle,
 } from "@mui/material";
+import { debounce } from "lodash";
 
-const marks = Array.from({ length: 21 }, (_, i) => {
+const conceptMarks = Array.from({ length: 21 }, (_, i) => {
   const value = i * 0.05;
   const label = [0, 0.25, 0.5, 0.75, 1].includes(value)
     ? value.toString()
     : undefined;
   return { value, label };
 });
+const rangeMarks = Array.from({ length: 21 }, (_, i) => {
+  const value = i * 5;
+  const label = [0, 25, 50, 75, 100].includes(value)
+    ? value.toString()
+    : undefined;
+  return { value, label };
+});
 
-function CustomSlider({ color, ...props }) {
+function CustomButton(props: ButtonProps) {
+  return (
+    <Button
+      variant="contained"
+      size="small"
+      {...props}
+      sx={{
+        textTransform: "none",
+        color: (theme) => theme.palette.text.primary,
+        ...(props?.sx || {}),
+      }}
+    />
+  );
+}
+
+function CustomSlider({ sliderColor, ...props }: CustomSliderPropsType) {
   const sliderStyle = {
-    color: color,
+    color: sliderColor,
     "& .MuiSlider-mark": {
       height: 4,
       width: 4,
@@ -46,7 +74,7 @@ function CustomSlider({ color, ...props }) {
         fontSize: "0.9rem",
       },
     "& .MuiSlider-rail": {
-      backgroundColor: color === "red" ? "#f00" : "#808080", // Set the color of the rail based on color prop
+      backgroundColor: sliderColor === "red" ? "#f00" : "#808080", // Set the color of the rail based on color prop
     },
   };
 
@@ -56,14 +84,22 @@ function CustomSlider({ color, ...props }) {
 export default function TraversalPanel() {
   const validBrainRuns = getValidBrainRuns();
   const [brainRunValue, setBrainRunValue] = useState(validBrainRuns[0]);
-  const [selectedSamples, setSelectedSamples] = useRecoilState(
-    fos.selectedSamples
-  );
+  const selectedSamples = useRecoilValue(fos.selectedSamples);
   const [startingPoint, setStartingPoint] = useState("");
   const [conceptSliders, setConceptSliders] = useState([
     { value: 0, text: "" },
   ]);
   const [scaleSlider, setScaleSlider] = useState(0);
+  const traversing = useRef(false);
+  const [showStartingPointError, setShowStartingPointError] = useState(false);
+  const [traverseError, setTraverseError] = useState("");
+
+  const lastSampleId = useMemo(() => {
+    return Array.from(selectedSamples)[selectedSamples.size - 1] as string;
+  }, [selectedSamples]);
+  const canUpdateStartingPoint = useMemo(() => {
+    return lastSampleId && lastSampleId !== startingPoint;
+  }, [lastSampleId, startingPoint]);
 
   const handleBrainRunChange = (event) => {
     setBrainRunValue(event.target.value);
@@ -97,66 +133,156 @@ export default function TraversalPanel() {
     setConceptSliders(newSliders);
   };
 
-  const addConceptSlider = (sliders) => {
-    // Check if all existing sliders have text entered
-    const allSlidersHaveText = sliders.every(
-      (slider) => slider.text.trim() !== ""
-    );
-
-    if (allSlidersHaveText && sliders.length < 8) {
-      setConceptSliders([...sliders, { value: 0, text: "" }]);
-    }
-  };
-
   const handleScaleSliderChange = (event, newValue) => {
     setScaleSlider(newValue);
   };
 
-  const handleSetInitialImageClick = () => {
-    const firstSampleId = selectedSamples.values().next().value;
-    setStartingPoint(firstSampleId);
+  const handleSetInitialImageClick = async () => {
+    if (!lastSampleId) {
+      return setShowStartingPointError(true);
+    }
+    setStartingPoint(lastSampleId);
+    getSampleURL.execute({ id: lastSampleId });
   };
 
   const operatorExecutor = useOperatorExecutor(
     "@jacobmarks/concept_space_traversal/traverser"
   );
+  const getSampleURL = useOperatorExecutor(
+    "@jacobmarks/concept_space_traversal/get_sample_url"
+  );
+
+  const traverseData = useMemo(() => {
+    return {
+      brainRunValue,
+      conceptSliders,
+      scaleSlider,
+      startingPoint,
+    };
+  }, [brainRunValue, conceptSliders, scaleSlider, startingPoint]);
+
+  const validateTraverseData = useCallback((traverseData) => {
+    const { sliders, startingPoint } = traverseData;
+    if (!startingPoint) return "You must set the initial image";
+    const hasValidSliders =
+      Array.isArray(sliders) &&
+      sliders.some(({ concept, strength }) => {
+        return (
+          typeof concept === "string" &&
+          concept.trim().length > 0 &&
+          strength > 0
+        );
+      });
+    if (!hasValidSliders)
+      return "You must have at lease one concept with non-zero weight";
+  }, []);
+
+  const traverse = useCallback((data) => {
+    const { conceptSliders, startingPoint, scaleSlider, brainRunValue } = data;
+    const formattedSliders = conceptSliders
+      .filter(({ text }) => text.trim().length > 0)
+      .map((slider) => ({
+        concept: slider.text,
+        strength: slider.value,
+      }));
+    const error = validateTraverseData({
+      sliders: formattedSliders,
+      startingPoint,
+    });
+    if (error) {
+      return setTraverseError(error);
+    } else {
+      setTraverseError("");
+    }
+    operatorExecutor.execute({
+      sample: startingPoint,
+      concepts: formattedSliders,
+      text_scale: scaleSlider.valueOf(),
+      index: brainRunValue,
+    });
+    traversing.current = true;
+  }, []);
+
+  const debouncedTraverse = useMemo(() => debounce(traverse, 500), []);
+
+  useEffect(() => {
+    if (traversing.current) {
+      debouncedTraverse(traverseData);
+    }
+  }, [traverseData]);
+
+  const sampleMediaURL = useMemo(() => {
+    return getSampleURL?.result?.url;
+  }, [getSampleURL]);
+  const loadingSampleMediaURL = useMemo(() => {
+    return getSampleURL?.isExecuting;
+  }, [getSampleURL]);
 
   return (
-    <Box p={4} sx={{ marginBottom: 2, justifyContent: "center" }}>
+    <Box p={4} sx={{ justifyContent: "center" }}>
       <Typography
         variant="h6"
         sx={{ marginBottom: 2, justifyContent: "center" }}
       >
         Concept Traversal
       </Typography>
-      <Typography
-        variant="body2"
-        sx={{ marginBottom: 2, justifyContent: "center" }}
-      >
+      <Typography variant="body2" sx={{ justifyContent: "center" }}>
         Use this tool to traverse a concept space. The concept space is defined
         by a set of text concepts, which are weighted relative to the initial
         image. The traversal will return the most similar images to the concept
         you have amalgamated.
       </Typography>
-      <Box p={4}>
-        {/* ... other code ... */}
-        <Button variant="contained" onClick={handleSetInitialImageClick}>
-          Set Initial Image
-        </Button>
-        {startingPoint && (
-          <Typography>Starting Point: {startingPoint}</Typography>
+      <Box sx={{ py: 4, alignItems: "center" }}>
+        {!startingPoint && (
+          <Box>
+            <CustomButton onClick={handleSetInitialImageClick}>
+              {`Set initial image`}
+            </CustomButton>
+            <ErrorView
+              details={
+                showStartingPointError
+                  ? "You must select at least one sample in Samples tab"
+                  : ""
+              }
+            />
+            {/* {showStartingPointError && (
+              <Typography color="error" fontSize={12}></Typography>
+            )} */}
+          </Box>
         )}
-        {/* ... other code ... */}
+        {startingPoint && (
+          <Stack spacing={1}>
+            <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
+              {startingPoint && (
+                <Typography>Starting Point: {startingPoint}</Typography>
+              )}
+              {loadingSampleMediaURL && <CircularProgress size={24} />}
+              <CustomButton
+                onClick={handleSetInitialImageClick}
+                disabled={!canUpdateStartingPoint}
+              >
+                Update initial image
+              </CustomButton>
+            </Box>
+            <Box>
+              {sampleMediaURL && !loadingSampleMediaURL && (
+                <img src={sampleMediaURL} style={{ maxHeight: 250 }} />
+              )}
+            </Box>
+          </Stack>
+        )}
       </Box>
       <Box sx={{ display: "flex", justifyContent: "left" }}>
         <FormControl>
-          <InputLabel id="my-select-label">Sim Index</InputLabel>
+          <InputLabel id="my-select-label">Similarity index</InputLabel>
           <Select
             labelId="demo-simple-select-label"
             id="demo-simple-select"
             value={brainRunValue}
-            label="Brain Key"
+            label="Similarity index"
             onChange={handleBrainRunChange}
+            size="small"
+            sx={{ minWidth: 100 }}
           >
             {validBrainRuns.map((item) => (
               <MenuItem key={item} value={item}>
@@ -167,54 +293,49 @@ export default function TraversalPanel() {
         </FormControl>
       </Box>
 
-      <Stack direction="column" spacing={2}>
-        <Box sx={{ display: "flex", justifyContent: "center" }}>
-          {/* <img
-            src={
-              "localhost:/Users/jacobmarks/fiftyone/coco-2017/validation/data/000000000139.jpg"
-            }
-            alt="Description of the image"
-            style={{ width: "100px", height: "100px" }}
-          /> */}
-        </Box>
+      <Stack direction="column" spacing={2} sx={{ pt: 2 }}>
         {conceptSliders.map((slider, index) => (
-          <Stack key={index} direction="row" spacing={2} alignItems="center">
+          <Stack key={index} direction="row" spacing={3} alignItems="center">
             <TextField
               id={`text-${index}`}
               label={`Concept ${index + 1}`}
               variant="outlined"
               value={slider.text}
               onChange={(e) => handleTextChange(index, e.target.value)}
-              onBlur={addConceptSlider}
+              size="small"
             />
             <CustomSlider
-              color="red"
+              sliderColor="red"
               min={0}
               max={1}
               value={slider.value}
               step={0.01}
               track={false}
-              marks={marks}
+              marks={conceptMarks}
+              valueLabelDisplay="auto"
               onChange={(e, value) => handleConceptSlidersChange(index, value)}
             />
           </Stack>
         ))}
       </Stack>
-      <Box sx={{ display: "flex", justifyContent: "center", marginTop: 6 }}>
-        <Typography id="input-slider" sx={{ marginRight: 2 }}>
-          Scale
-        </Typography>
+      <Stack
+        direction="row"
+        sx={{ mt: 6, mb: 4, alignItems: "center" }}
+        spacing={3}
+      >
+        <Typography id="input-slider">Scale</Typography>
         <CustomSlider
-          color="gray" // or "gray"
+          sliderColor="gray" // or "gray"
           min={0}
           max={100}
           value={scaleSlider}
           step={0.01}
           track={false}
-          marks={marks}
+          marks={rangeMarks}
+          valueLabelDisplay="auto"
           onChange={handleScaleSliderChange}
         />
-      </Box>
+      </Stack>
       <Typography
         variant="body2"
         sx={{ display: "flex", justifyContent: "center", marginBottom: 2 }}
@@ -224,28 +345,26 @@ export default function TraversalPanel() {
         into the similarity calculation. The appropriate value for this scale is
         dependent on the dataset and the text concepts you have chosen.
       </Typography>
+      <ErrorView details={operatorExecutor?.error || traverseError} />
       <Box
-        sx={{ display: "flex", justifyContent: "center", marginTop: "20px" }}
+        sx={{
+          display: "flex",
+          justifyContent: "center",
+          marginTop: "20px",
+          alignItems: "center",
+        }}
       >
-        <Button
-          variant="contained"
-          onClick={() => {
-            const formattedSliders = conceptSliders.map((slider) => ({
-              concept: slider.text,
-              strength: slider.value,
-            }));
-            const firstSampleId = selectedSamples.values().next().value;
-
-            operatorExecutor.execute({
-              sample: firstSampleId,
-              concepts: formattedSliders,
-              text_scale: scaleSlider.valueOf(),
-              index: brainRunValue,
-            });
-          }}
-        >
-          Traverse!
-        </Button>
+        {operatorExecutor.isExecuting && (
+          <CircularProgress size={24} sx={{ mr: 2 }} />
+        )}
+        <Box title={startingPoint ? undefined : "Please set the initial image"}>
+          <CustomButton
+            onClick={() => traverse(traverseData)}
+            disabled={operatorExecutor.isExecuting}
+          >
+            Traverse!
+          </CustomButton>
+        </Box>
       </Box>
     </Box>
   );
@@ -304,4 +423,21 @@ function traversalActivator() {
     }
   }
   return false;
+}
+
+type CustomSliderPropsType = SliderProps & {
+  sliderColor: string;
+};
+
+function ErrorView(props) {
+  const { title, details } = props;
+
+  if (!title && !details) return null;
+
+  return (
+    <Alert severity="error" sx={{ mt: 2, whiteSpace: "pre-wrap" }}>
+      {title && <AlertTitle>{title}</AlertTitle>}
+      {details}
+    </Alert>
+  );
 }
