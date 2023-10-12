@@ -8,6 +8,8 @@
 from bson import json_util
 import json
 from scipy import linalg
+import fiftyone as fo
+import fiftyone.core.storage as fos
 
 
 import fiftyone.operators as foo
@@ -32,7 +34,7 @@ def _normalize(embedding):
 
 
 def generate_destination_vector(index, sample_id, concepts, text_scale):
-    sample_embedding = index.get_embeddings(sample_id)[0][0]
+    sample_embedding = index.get_embeddings([sample_id])[0][0]
 
     model = index.get_model()
 
@@ -128,6 +130,35 @@ class RunTraversal(foo.Operator):
         )
 
 
+class GetSampleURL(foo.Operator):
+    @property
+    def config(self):
+        return foo.OperatorConfig(
+            name="get_sample_url",
+            label="Concept Traversal: Get sample URL",
+            unlisted=True,
+        )
+
+    def execute(self, ctx):
+        try:
+            sample_id = ctx.params.get("id", None)
+            sample = ctx.dataset[sample_id]
+            sample_filepath = sample.filepath
+            try:
+                # pylint: disable=no-member
+                sample_filepath = fos.get_url(sample_filepath)
+            except:
+                address = fo.config.default_app_address
+                port = fo.config.default_app_port
+                sample_filepath = (
+                    f"http://{address}:{port}/media?filepath={sample_filepath}"
+                )
+            return {"url": sample_filepath}
+        except:
+            return {}
+
+
 def register(p):
     p.register(RunTraversal)
     p.register(OpenTraversalPanel)
+    p.register(GetSampleURL)
