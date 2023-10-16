@@ -1,5 +1,6 @@
 ## Concept Space Traversal Plugin
-![2023-08-25 11 33 40](https://github.com/jacobmarks/concept-space-traversal-plugin/assets/12500356/1e52624a-67f8-48f9-8dcf-99f4a0568e7c)
+
+![concept_traversal](https://github.com/jacobmarks/concept-space-traversal-plugin/assets/12500356/720b46aa-cfd1-478b-9e65-2f88cd5231bb)
 
 This plugin allows you to "traverse" the concept space of a similarity index
 by adding text prompts (with configurable strength) to a base image.
@@ -9,7 +10,7 @@ It demonstrates how to do the following:
 - use Python and JS in the same plugin
 - create a `Panel` with custom components
 - query dataset properties from JS
-- add an SVG icon to the UI
+- access samples and display their media files in a custom panel
 
 **Note:** This plugin requires a similarity index that supports prompts (i.e.
 embeds text and images) to be present on the dataset. You can create one with:
@@ -47,3 +48,7 @@ locally.
 ### `traverser`
 
 - Runs the Traverser on the dataset
+
+## 💪 Development
+
+This plugin was a joint creation between myself and [Ibrahim Manjra](https://github.com/imanjra). Couldn't have done it without his JavaScript wizardry!
