@@ -49,6 +49,10 @@ locally.
 
 - Runs the Traverser on the dataset
 
+### `get_sample_url`
+
+- Returns the resource URL of the media file associated with a sample, from the sample's ID.
+
 ## 💪 Development
 
 This plugin was a joint creation between myself and [Ibrahim Manjra](https://github.com/imanjra). Couldn't have done it without his JavaScript wizardry!
