@@ -5,13 +5,6 @@
 This plugin allows you to "traverse" the concept space of a similarity index
 by adding text prompts (with configurable strength) to a base image.
 
-It demonstrates how to do the following:
-
-- use Python and JS in the same plugin
-- create a `Panel` with custom components
-- query dataset properties from JS
-- access samples and display their media files in a custom panel
-
 **Note:** This plugin requires a similarity index that supports prompts (i.e.
 embeds text and images) to be present on the dataset. You can create one with:
 
@@ -27,6 +20,10 @@ fob.compute_similarity(
     metric="cosine",
     )
 ```
+
+## Watch On Youtube
+[![Video Thumbnail](https://img.youtube.com/vi/XwstS_YCxoc/0.jpg)](https://www.youtube.com/watch?v=XwstS_YCxoc&list=PLuREAXoPgT0RZrUaT0UpX_HzwKkoB-S9j&index=10)
+
 
 ## Installation
 
