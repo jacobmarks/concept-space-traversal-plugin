@@ -16,7 +16,7 @@ dataset = fo.load_dataset("my_dataset")
 fob.compute_similarity(
     dataset,
     brain_key="my_brain_key",
-    model_name="clip-vit-base32-torch",
+    model="clip-vit-base32-torch",
     metric="cosine",
     )
 ```
