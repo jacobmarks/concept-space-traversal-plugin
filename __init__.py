@@ -5,8 +5,6 @@
 |
 """
 
-from bson import json_util
-import json
 from scipy import linalg
 import fiftyone as fo
 import fiftyone.core.storage as fos
@@ -66,10 +64,6 @@ def run_traversal(ctx):
     return view
 
 
-def serialize_view(view):
-    return json.loads(json_util.dumps(view._serialize()))
-
-
 class OpenTraversalPanel(foo.Operator):
     @property
     def config(self):
@@ -124,10 +118,7 @@ class RunTraversal(foo.Operator):
 
     def execute(self, ctx):
         view = run_traversal(ctx)
-        ctx.trigger(
-            "set_view",
-            params=dict(view=serialize_view(view)),
-        )
+        ctx.ops.set_view(view=view)
 
 
 class GetSampleURL(foo.Operator):
